@@ -1,0 +1,79 @@
+# Credit default risk modelling & portfolio credit VaR - run configuration.
+
+seed: 42
+
+data:
+  raw_path: data/raw/accepted_2007_to_2018Q4.csv
+  term_months: 36
+  issue_year_min: 2013
+  issue_year_max: 2016
+  drop_unresolved: true          # exclude Current / Late loans (outcome unknown)
+  train_years: [2013, 2014, 2015]
+  oot_years: [2016]
+
+binning:
+  backend: optbinning            # falls back to "quantile" if optbinning is not installed
+  max_n_bins: 8
+  min_bin_size: 0.05
+  iv_min: 0.02
+
+scorecard:
+  pdo: 20
+  base_score: 600
+  base_odds: 50                  # 50:1 good:bad odds at 600 points
+  C: 1.0
+  corr_max: 0.7
+
+xgboost:
+  early_stopping_rounds: 50
+  valid_size: 0.2
+  params:
+    n_estimators: 600
+    learning_rate: 0.05
+    max_depth: 4
+    min_child_weight: 50
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_lambda: 1.0
+
+validation:
+  calibration_bins: 10
+  psi_bins: 10
+  n_bootstrap: 100
+
+explain:
+  shap_sample: 5000
+  fairness_approval_rate: 0.80
+
+portfolio:
+  champion: scorecard            # PDs used downstream: scorecard | xgboost
+  ead_method: funded             # funded | avg_12m
+  pd_horizon: 1y                 # 1y (annualised) | lifetime
+  lgd_net_of_fees: false
+
+credit_var:
+  n_paths: 100000
+  rho: 0.15                      # systematic (economy) asset correlation
+  sector_rho: 0.05               # extra loading on the purpose-sector factor
+  confidence: 0.999
+  batch_size: 10000
+  n_pd_bands: 20
+  method: binomial               # binomial (granular) | conditional (ASRF limit)
+
+stress:
+  scenarios:
+    - name: PD x1.5
+      pd_multiplier: 1.5
+    - name: PD x2
+      pd_multiplier: 2.0
+    - name: debt_consolidation correlation shock
+      sector: debt_consolidation
+      sector_rho: 0.20           # within-sector correlation 0.15 + 0.20 = 0.35
+
+backtest:
+  n_bands: 10
+
+monitoring:
+  psi_warn: 0.10
+  psi_trigger: 0.25
+  gini_drop_trigger_pts: 5.0
